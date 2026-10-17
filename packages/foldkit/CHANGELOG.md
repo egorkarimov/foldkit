@@ -1,5 +1,19 @@
 # foldkit
 
+## 0.169.0
+
+### Minor Changes
+
+- [#1679](https://github.com/foldkit/foldkit/pull/1679) [`76fa0d1`](https://github.com/foldkit/foldkit/commit/76fa0d1ee2a5f9d06333e83a1ee381eab0ed37d5) Thanks [@Tanner-Scadden](https://github.com/Tanner-Scadden)! - Add `Lazy.expectAllReused` to `foldkit/test` to check lazy cache reuse. It renders a view twice with the same Model and throws an error if any lazy call misses its cache on the second render. The error identifies each miss by slot number, includes the key for keyed calls, and explains the reason. `ArgumentsChanged` also lists the changed argument indices. The helper throws if the second render makes no lazy calls. Test Models that render different memoized content separately, and test child views directly when an outer lazy cache hit skips them.
+
+### Patch Changes
+
+- Rebuild with the release's shared tooling configuration so the published packages and website use the same build inputs.
+
+- [#1659](https://github.com/foldkit/foldkit/pull/1659) [`1ce3d4b`](https://github.com/foldkit/foldkit/commit/1ce3d4b050553d7564ed055488877f0039bbad31) Thanks [@devinjameson](https://github.com/devinjameson)! - Reduce server rendering CPU work by sharing parsed HTML trees across checks that use the same insertion context and scripting mode. Template injection captures the rendered HTML once so validation and insertion use the same markup. All markup safety and hydration checks run in both development and production.
+
+- [#1666](https://github.com/foldkit/foldkit/pull/1666) [`96fc8d2`](https://github.com/foldkit/foldkit/commit/96fc8d2ec12c3d8b261bdf017db9e0ebf24ec49f) Thanks [@Tanner-Scadden](https://github.com/Tanner-Scadden)! - Story and Scene errors for unresolved child Commands now point to component test helpers such as `Toast.test.drainEntry`.
+
 ## 0.168.0
 
 ### Patch Changes
