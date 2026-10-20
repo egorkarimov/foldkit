@@ -14,21 +14,28 @@ export type ParsedFragmentModes = Readonly<{
 // tag, and it matches tag names ASCII case-insensitively, so markup without that
 // text parses identically in both modes. Text that only mentions `<noscript` in
 // an attribute value or a comment costs a second parse and never skips a needed
-// one. A `<noscript>` insertion context counts as sensitive too: the HTML
-// standard tokenizes its content differently per mode, although parse5 does not.
+// one. A `<noscript>` insertion context gets both parses as well. The HTML
+// standard reads its content as raw text only when scripting is enabled. parse5
+// 8.0 reads it as raw text in both modes, but the `^8` range admits a release
+// that follows the standard.
 const NOSCRIPT_START_TAG = /<noscript/i
 
 const isScriptingSensitive = (html: string): boolean =>
   NOSCRIPT_START_TAG.test(html)
 
-const isNoscriptContext = (
-  context: DefaultTreeAdapterMap['element'],
+/** Whether `element` is an HTML `<noscript>`, the only kind whose content the
+ *  parser reads differently with scripting enabled and disabled. An element of
+ *  that name inside SVG or MathML is an ordinary foreign element.
+ * @internal
+ */
+export const isHtmlNoscript = (
+  element: DefaultTreeAdapterMap['element'],
 ): boolean =>
-  context.tagName.toLowerCase() === 'noscript' &&
-  context.namespaceURI === Parse5Html.NS.HTML
+  element.tagName.toLowerCase() === 'noscript' &&
+  element.namespaceURI === Parse5Html.NS.HTML
 
-/** The scripting modes whose parses of `sources` can differ: enabled and
- *  disabled when any source contains `<noscript`, enabled alone otherwise.
+/** The scripting modes to parse `sources` in: enabled and disabled when any
+ *  source contains `<noscript` in any letter case, enabled alone otherwise.
  * @internal
  */
 export const scriptingModesFor = (
@@ -50,7 +57,7 @@ export const parseFragmentModes = (
     scriptingEnabled: true,
   })
 
-  if (isScriptingSensitive(html) || isNoscriptContext(context)) {
+  if (isScriptingSensitive(html) || isHtmlNoscript(context)) {
     return {
       scripted,
       unscripted: parseFragment(context, html, {

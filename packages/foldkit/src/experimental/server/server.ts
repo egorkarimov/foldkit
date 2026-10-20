@@ -54,6 +54,7 @@ import { Url, fromString } from '../../url/index.js'
 import {
   type ParsedFragmentModes,
   distinctFragments,
+  isHtmlNoscript,
   parseFragmentModes,
   scriptingModesFor,
 } from './fragment.js'
@@ -331,14 +332,6 @@ const DIV_FRAGMENT_CONTEXT = buildDivFragmentContext()
 // checked, so a fallback that frames cleanly for one visitor cannot break the
 // document for the other. Markup without a `<noscript>` parses identically in
 // both, so one parse covers them.
-//
-// The other checks run on these same trees. A sentinel that survives as the
-// last top-level node was parsed after everything the root opened had closed, so
-// detaching it leaves exactly the tree the root markup parses to on its own.
-// That holds only when the surviving comment is the appended one. Markup that
-// writes the same comment and then leaves a tag unfinished hides the appended
-// copy inside the tag the parser drops, so markup containing the sentinel text
-// is parsed again without it rather than trusted.
 const TRAILING_SENTINEL_DATA = 'foldkit-trailing-boundary'
 const TRAILING_SENTINEL = `<!--${TRAILING_SENTINEL_DATA}-->`
 
@@ -375,14 +368,13 @@ const trailingSentinelOf = (
 // `<noscript>` means something to the parser only in the HTML namespace. Inside
 // SVG or MathML an element of that name is an ordinary foreign element whose
 // content parses the same way in both modes, so skipping it there would leave a
-// real HTML `<noscript>` nested below it unchecked. `<template>` holds its
-// children in a separate content fragment rather than in `childNodes`, so its
-// content is traversed explicitly; a fallback inside one is invisible otherwise,
-// and declarative shadow DOM makes that content live in the page.
-const isHtmlNoscript = (element: Parse5Element): boolean =>
-  element.tagName.toLowerCase() === 'noscript' &&
-  element.namespaceURI === HTML_NAMESPACE
-
+// real HTML `<noscript>` nested below it unchecked; `isHtmlNoscript` draws that
+// line.
+//
+// `<template>` holds its children in a separate content fragment rather than in
+// `childNodes`, so its content is traversed explicitly; a fallback inside one is
+// invisible otherwise, and declarative shadow DOM makes that content live in the
+// page.
 const traversableContent = (
   element: Parse5Element,
 ): Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }> => {
@@ -716,29 +708,34 @@ export const __assertNoDocumentStructureEscape = (html: string): void => {
   )
 }
 
-const detachSentinels = (
-  framed: ParsedFragmentModes,
-  sentinels: ReadonlyArray<Parse5ChildNode>,
-): ParsedFragmentModes => {
-  for (const sentinel of sentinels) {
-    defaultTreeAdapter.detachNode(sentinel)
-  }
-  return framed
-}
-
+// The framing parse doubles as the parse every other root check runs on. A
+// sentinel that survives as the last top-level node was parsed after everything
+// the root opened had closed, so detaching it leaves exactly the tree the root
+// markup parses to on its own. That holds only when the surviving comment is the
+// appended one. Markup that writes the same comment and then leaves a tag
+// unfinished hides the appended copy inside the tag the parser drops, so markup
+// containing the sentinel text is parsed again without it rather than trusted.
 const parseClosedRoot = (html: string): ParsedFragmentModes => {
   const framed = parseFragmentModes(
     DIV_FRAGMENT_CONTEXT,
     html + TRAILING_SENTINEL,
   )
-  const maybeSentinels = Option.all(
-    Array.map(distinctFragments(framed), trailingSentinelOf),
+  const maybeSentinels = pipe(
+    distinctFragments(framed),
+    Array.map(trailingSentinelOf),
+    Option.all,
   )
 
   if (Option.isSome(maybeSentinels)) {
-    return html.includes(TRAILING_SENTINEL_DATA)
-      ? parseFragmentModes(DIV_FRAGMENT_CONTEXT, html)
-      : detachSentinels(framed, maybeSentinels.value)
+    if (html.includes(TRAILING_SENTINEL_DATA)) {
+      return parseFragmentModes(DIV_FRAGMENT_CONTEXT, html)
+    } else {
+      for (const sentinel of maybeSentinels.value) {
+        defaultTreeAdapter.detachNode(sentinel)
+      }
+
+      return framed
+    }
   }
   throw new Error(
     '[foldkit] The rendered root does not close cleanly. An unterminated ' +
